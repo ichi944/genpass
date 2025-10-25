@@ -59,23 +59,23 @@ The password generator supports fine-grained control over character composition 
 Each character type can have independent minimum and/or maximum constraints:
 
 - **Numeric (0-9)**
-  - `--min-numeric <n>` - Minimum number of numeric characters
-  - `--max-numeric <n>` - Maximum number of numeric characters
+  - `-n, --min-numeric <n>` - Minimum number of numeric characters
+  - `-N, --max-numeric <n>` - Maximum number of numeric characters
 
 - **Lowercase Alpha (a-z)**
-  - `--min-lower <n>` - Minimum number of lowercase letters
-  - `--max-lower <n>` - Maximum number of lowercase letters
+  - `-a, --min-lower <n>` - Minimum number of lowercase letters
+  - `-A, --max-lower <n>` - Maximum number of lowercase letters
 
 - **Uppercase Alpha (A-Z)**
   - `--min-upper <n>` - Minimum number of uppercase letters
   - `--max-upper <n>` - Maximum number of uppercase letters
 
 - **Symbols (!@#$%^&*, etc.)**
-  - `--min-symbol <n>` - Minimum number of symbol characters
-  - `--max-symbol <n>` - Maximum number of symbol characters
+  - `-s, --min-symbol <n>` - Minimum number of symbol characters
+  - `-S, --max-symbol <n>` - Maximum number of symbol characters
 
 ### Password Length Controls
-- `--length <n>` - Set exact password length (shorthand for setting both min and max to the same value)
+- `-l, --length <n>` - Set exact password length (shorthand for setting both min and max to the same value)
 - `--min-length <n>` - Minimum total password length
 - `--max-length <n>` - Maximum total password length
 
@@ -86,7 +86,7 @@ Each character type can have independent minimum and/or maximum constraints:
 - `--exclude-ambiguous` - Exclude visually similar characters (0/O, 1/l/I, etc.)
 
 ### Output Options
-- `--count <n>` - Number of passwords to generate (default: 1)
+- `-c, --count <n>` - Number of passwords to generate (default: 1)
 
 ### Configuration Management
 - `--save-config` - Save current options to `~/.genpassconfig` (overwrites existing file)
@@ -99,14 +99,17 @@ Each character type can have independent minimum and/or maximum constraints:
 
 **Example workflow:**
 ```bash
-# Save your preferred defaults
-genpass --length 20 --min-numeric 3 --exclude-ambiguous --save-config
+# Save your preferred defaults (using short flags)
+genpass -l 20 -n 3 --exclude-ambiguous --save-config
 
 # Future runs use saved defaults
 genpass              # Uses saved settings
 
 # Override specific options as needed
-genpass --count 5    # Uses saved settings but generates 5 passwords
+genpass -c 5         # Uses saved settings but generates 5 passwords
+
+# Mix short and long flags
+genpass -l 16 -n 2 -a 3 -s 2 --min-upper 2
 ```
 
 ## Architecture

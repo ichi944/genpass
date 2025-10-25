@@ -12,19 +12,19 @@ use std::process;
 #[command(version, about, long_about = None)]
 pub struct Cli {
     /// Minimum number of numeric characters (0-9)
-    #[arg(long)]
+    #[arg(short = 'n', long)]
     pub min_numeric: Option<usize>,
 
     /// Maximum number of numeric characters (0-9)
-    #[arg(long)]
+    #[arg(short = 'N', long)]
     pub max_numeric: Option<usize>,
 
     /// Minimum number of lowercase letters (a-z)
-    #[arg(long)]
+    #[arg(short = 'a', long)]
     pub min_lower: Option<usize>,
 
     /// Maximum number of lowercase letters (a-z)
-    #[arg(long)]
+    #[arg(short = 'A', long)]
     pub max_lower: Option<usize>,
 
     /// Minimum number of uppercase letters (A-Z)
@@ -36,15 +36,15 @@ pub struct Cli {
     pub max_upper: Option<usize>,
 
     /// Minimum number of symbol characters
-    #[arg(long)]
+    #[arg(short = 's', long)]
     pub min_symbol: Option<usize>,
 
     /// Maximum number of symbol characters
-    #[arg(long)]
+    #[arg(short = 'S', long)]
     pub max_symbol: Option<usize>,
 
     /// Exact password length (shorthand for setting both min and max length)
-    #[arg(long, conflicts_with_all = ["min_length", "max_length"])]
+    #[arg(short = 'l', long, conflicts_with_all = ["min_length", "max_length"])]
     pub length: Option<usize>,
 
     /// Minimum total password length
