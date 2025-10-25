@@ -28,11 +28,11 @@ pub struct Cli {
     pub max_lower: Option<usize>,
 
     /// Minimum number of uppercase letters (A-Z)
-    #[arg(long)]
+    #[arg(short = 'u', long)]
     pub min_upper: Option<usize>,
 
     /// Maximum number of uppercase letters (A-Z)
-    #[arg(long)]
+    #[arg(short = 'U', long)]
     pub max_upper: Option<usize>,
 
     /// Minimum number of symbol characters

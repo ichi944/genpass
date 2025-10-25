@@ -67,8 +67,8 @@ Each character type can have independent minimum and/or maximum constraints:
   - `-A, --max-lower <n>` - Maximum number of lowercase letters
 
 - **Uppercase Alpha (A-Z)**
-  - `--min-upper <n>` - Minimum number of uppercase letters
-  - `--max-upper <n>` - Maximum number of uppercase letters
+  - `-u, --min-upper <n>` - Minimum number of uppercase letters
+  - `-U, --max-upper <n>` - Maximum number of uppercase letters
 
 - **Symbols (!@#$%^&*, etc.)**
   - `-s, --min-symbol <n>` - Minimum number of symbol characters
@@ -108,8 +108,8 @@ genpass              # Uses saved settings
 # Override specific options as needed
 genpass -c 5         # Uses saved settings but generates 5 passwords
 
-# Mix short and long flags
-genpass -l 16 -n 2 -a 3 -s 2 --min-upper 2
+# Mix short flags for all character types
+genpass -l 16 -n 2 -a 3 -u 2 -s 2
 ```
 
 ## Architecture
