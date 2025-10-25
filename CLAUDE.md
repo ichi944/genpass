@@ -88,16 +88,45 @@ Each character type can have independent minimum and/or maximum constraints:
 ### Output Options
 - `--count <n>` - Number of passwords to generate (default: 1)
 
+### Configuration Management
+- `--save-config` - Save current options to `~/.genpassconfig` (overwrites existing file)
+
+**Configuration Behavior:**
+- On startup, genpass automatically loads settings from `~/.genpassconfig` if it exists
+- CLI arguments override saved configuration values
+- When `--save-config` is used, the merged configuration (saved config + CLI overrides) is written to the file
+- Config file format is simple `key=value` pairs, zero dependencies for parsing
+
+**Example workflow:**
+```bash
+# Save your preferred defaults
+genpass --length 20 --min-numeric 3 --exclude-ambiguous --save-config
+
+# Future runs use saved defaults
+genpass              # Uses saved settings
+
+# Override specific options as needed
+genpass --count 5    # Uses saved settings but generates 5 passwords
+```
+
 ## Architecture
 
-The codebase is organized into three main modules:
+The codebase is organized into four main modules:
 
 ### Module Structure
 
 **`src/main.rs`** - CLI entry point
 - Parses command-line arguments using `clap`
-- Converts CLI args to `PasswordConstraints`
+- Loads saved configuration from `~/.genpassconfig`
+- Merges config with CLI args (CLI takes precedence)
+- Converts merged config to `PasswordConstraints`
 - Handles errors and outputs passwords
+
+**`src/config.rs`** - Configuration management (zero dependencies)
+- `Config` - Struct holding all configurable options
+- `Config::load()` - Reads and parses `~/.genpassconfig` using simple key=value format
+- `Config::save()` - Writes configuration to file
+- `Config::merge_with_cli()` - Merges CLI arguments with loaded config
 
 **`src/random.rs`** - Zero-dependency secure random number generation
 - `SecureRandom::fill_bytes()` - Reads from `/dev/urandom` on Unix systems

@@ -1,5 +1,6 @@
 mod random;
 mod generator;
+mod config;
 
 use clap::Parser;
 use generator::{PasswordConstraints, PasswordGenerator};
@@ -9,90 +10,120 @@ use std::process;
 #[derive(Parser, Debug)]
 #[command(name = "genpass")]
 #[command(version, about, long_about = None)]
-struct Cli {
+pub struct Cli {
     /// Minimum number of numeric characters (0-9)
     #[arg(long)]
-    min_numeric: Option<usize>,
+    pub min_numeric: Option<usize>,
 
     /// Maximum number of numeric characters (0-9)
     #[arg(long)]
-    max_numeric: Option<usize>,
+    pub max_numeric: Option<usize>,
 
     /// Minimum number of lowercase letters (a-z)
     #[arg(long)]
-    min_lower: Option<usize>,
+    pub min_lower: Option<usize>,
 
     /// Maximum number of lowercase letters (a-z)
     #[arg(long)]
-    max_lower: Option<usize>,
+    pub max_lower: Option<usize>,
 
     /// Minimum number of uppercase letters (A-Z)
     #[arg(long)]
-    min_upper: Option<usize>,
+    pub min_upper: Option<usize>,
 
     /// Maximum number of uppercase letters (A-Z)
     #[arg(long)]
-    max_upper: Option<usize>,
+    pub max_upper: Option<usize>,
 
     /// Minimum number of symbol characters
     #[arg(long)]
-    min_symbol: Option<usize>,
+    pub min_symbol: Option<usize>,
 
     /// Maximum number of symbol characters
     #[arg(long)]
-    max_symbol: Option<usize>,
+    pub max_symbol: Option<usize>,
 
     /// Exact password length (shorthand for setting both min and max length)
     #[arg(long, conflicts_with_all = ["min_length", "max_length"])]
-    length: Option<usize>,
+    pub length: Option<usize>,
 
     /// Minimum total password length
     #[arg(long)]
-    min_length: Option<usize>,
+    pub min_length: Option<usize>,
 
     /// Maximum total password length
     #[arg(long)]
-    max_length: Option<usize>,
+    pub max_length: Option<usize>,
 
     /// Define which symbol characters to use
     #[arg(long, default_value = "!@#$%^&*()_+-=[]{}|;:,.<>?")]
-    symbols: String,
+    pub symbols: String,
 
     /// Exclude visually ambiguous characters (0/O, 1/l/I, etc.)
     #[arg(long)]
-    exclude_ambiguous: bool,
+    pub exclude_ambiguous: bool,
 
     /// Number of passwords to generate
     #[arg(long, short = 'c', default_value = "1")]
-    count: usize,
+    pub count: usize,
+
+    /// Save current options to ~/.genpassconfig
+    #[arg(long)]
+    pub save_config: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
 
+    // Load saved configuration
+    let mut config = match config::Config::load() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Warning: Could not load config: {}", e);
+            config::Config::default()
+        }
+    };
+
+    // Merge CLI args with config (CLI takes precedence)
+    config.merge_with_cli(&cli);
+
+    // Save config if requested
+    if cli.save_config {
+        match config.save() {
+            Ok(()) => {
+                let path = config::Config::config_path().unwrap_or_default();
+                eprintln!("Configuration saved to {}", path.display());
+            }
+            Err(e) => {
+                eprintln!("Error saving configuration: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
     // Determine password length constraints
-    let (min_length, max_length) = if let Some(length) = cli.length {
+    let (min_length, max_length) = if let Some(length) = config.length {
         (length, length)
     } else {
-        let min = cli.min_length.unwrap_or(16); // Default minimum length
-        let max = cli.max_length.unwrap_or(min); // Default max equals min
+        let min = config.min_length.unwrap_or(16); // Default minimum length
+        let max = config.max_length.unwrap_or(min); // Default max equals min
         (min, max)
     };
 
     // Build password constraints
     let constraints = PasswordConstraints {
-        min_numeric: cli.min_numeric,
-        max_numeric: cli.max_numeric,
-        min_lower: cli.min_lower,
-        max_lower: cli.max_lower,
-        min_upper: cli.min_upper,
-        max_upper: cli.max_upper,
-        min_symbol: cli.min_symbol,
-        max_symbol: cli.max_symbol,
+        min_numeric: config.min_numeric,
+        max_numeric: config.max_numeric,
+        min_lower: config.min_lower,
+        max_lower: config.max_lower,
+        min_upper: config.min_upper,
+        max_upper: config.max_upper,
+        min_symbol: config.min_symbol,
+        max_symbol: config.max_symbol,
         min_length,
         max_length,
-        symbols: cli.symbols,
-        exclude_ambiguous: cli.exclude_ambiguous,
+        symbols: config.symbols.unwrap_or_else(|| "!@#$%^&*()_+-=[]{}|;:,.<>?".to_string()),
+        exclude_ambiguous: config.exclude_ambiguous.unwrap_or(false),
     };
 
     // Create password generator
@@ -105,7 +136,8 @@ fn main() {
     };
 
     // Generate passwords
-    for _ in 0..cli.count {
+    let count = config.count.unwrap_or(1);
+    for _ in 0..count {
         match generator.generate() {
             Ok(password) => println!("{}", password),
             Err(e) => {
