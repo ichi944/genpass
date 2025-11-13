@@ -195,7 +195,7 @@ CLI arguments always override saved configuration.
 ```bash
 # Add to ~/.zshrc to auto-copy generated passwords
 genpass() {
-    command genpass "$@" | pbcopy && pbpaste
+    command genpass "$@" | tr -d '\n' | pbcopy && pbpaste
 }
 
 # Now genpass automatically copies to clipboard and shows the password
@@ -209,12 +209,12 @@ genpass -l 32 -n 4         # All arguments are passed through
 ```bash
 # Using xclip
 genpass() {
-    command genpass "$@" | xclip -selection clipboard && xclip -selection clipboard -o
+    command genpass "$@" | tr -d '\n' | xclip -selection clipboard && xclip -selection clipboard -o
 }
 
 # Using wl-clipboard (Wayland)
 genpass() {
-    command genpass "$@" | wl-copy && wl-paste
+    command genpass "$@" | tr -d '\n' | wl-copy && wl-paste
 }
 ```
 
