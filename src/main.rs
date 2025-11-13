@@ -67,16 +67,46 @@ pub struct Cli {
     #[arg(long, short = 'c', default_value = "1")]
     pub count: usize,
 
-    /// Save current options to ~/.genpassconfig
+    /// Load configuration from a named profile
     #[arg(long)]
-    pub save_config: bool,
+    pub config: Option<String>,
+
+    /// Save current options to a named config (default: "default")
+    #[arg(long)]
+    pub save_config: Option<String>,
+
+    /// List all available saved configurations
+    #[arg(long)]
+    pub list_configs: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
 
+    // List configs if requested and exit
+    if cli.list_configs {
+        match config::Config::list_configs() {
+            Ok(configs) => {
+                if configs.is_empty() {
+                    println!("No saved configurations found.");
+                } else {
+                    println!("Available configurations:");
+                    for name in configs {
+                        println!("  {}", name);
+                    }
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error listing configurations: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
     // Load saved configuration
-    let mut config = match config::Config::load() {
+    let config_name = cli.config.as_deref();
+    let mut config = match config::Config::load(config_name) {
         Ok(cfg) => cfg,
         Err(e) => {
             eprintln!("Warning: Could not load config: {}", e);
@@ -88,10 +118,16 @@ fn main() {
     config.merge_with_cli(&cli);
 
     // Save config if requested
-    if cli.save_config {
-        match config.save() {
+    if let Some(ref save_name) = cli.save_config {
+        let name_to_save = if save_name.is_empty() {
+            None
+        } else {
+            Some(save_name.as_str())
+        };
+
+        match config.save(name_to_save) {
             Ok(()) => {
-                let path = config::Config::config_path().unwrap_or_default();
+                let path = config::Config::config_path(name_to_save).unwrap_or_default();
                 eprintln!("Configuration saved to {}", path.display());
             }
             Err(e) => {

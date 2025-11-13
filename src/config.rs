@@ -22,18 +22,26 @@ pub struct Config {
 }
 
 impl Config {
-    /// Get the path to the config file (~/.genpassconfig)
-    pub fn config_path() -> io::Result<PathBuf> {
+    /// Get the path to the config directory (~/.genpass/)
+    pub fn config_dir() -> io::Result<PathBuf> {
         let home = std::env::var("HOME").map_err(|_| {
             io::Error::new(io::ErrorKind::NotFound, "HOME environment variable not set")
         })?;
-        Ok(PathBuf::from(home).join(".genpassconfig"))
+        Ok(PathBuf::from(home).join(".genpass"))
     }
 
-    /// Load configuration from ~/.genpassconfig
+    /// Get the path to a named config file
+    /// If name is None or "default", returns ~/.genpass/default
+    pub fn config_path(name: Option<&str>) -> io::Result<PathBuf> {
+        let dir = Self::config_dir()?;
+        let filename = name.unwrap_or("default");
+        Ok(dir.join(filename))
+    }
+
+    /// Load configuration from a named config
     /// Returns default config if file doesn't exist
-    pub fn load() -> io::Result<Self> {
-        let path = Self::config_path()?;
+    pub fn load(name: Option<&str>) -> io::Result<Self> {
+        let path = Self::config_path(name)?;
 
         if !path.exists() {
             return Ok(Self::default());
@@ -43,52 +51,16 @@ impl Config {
         Self::parse(&content)
     }
 
-    /// Parse configuration from a string
-    fn parse(content: &str) -> io::Result<Self> {
-        let mut config = Self::default();
-
-        for line in content.lines() {
-            let line = line.trim();
-
-            // Skip empty lines and comments
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            // Parse key=value
-            if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim();
-                let value = value.trim();
-
-                match key {
-                    "min-numeric" => config.min_numeric = value.parse().ok(),
-                    "max-numeric" => config.max_numeric = value.parse().ok(),
-                    "min-lower" => config.min_lower = value.parse().ok(),
-                    "max-lower" => config.max_lower = value.parse().ok(),
-                    "min-upper" => config.min_upper = value.parse().ok(),
-                    "max-upper" => config.max_upper = value.parse().ok(),
-                    "min-symbol" => config.min_symbol = value.parse().ok(),
-                    "max-symbol" => config.max_symbol = value.parse().ok(),
-                    "length" => config.length = value.parse().ok(),
-                    "min-length" => config.min_length = value.parse().ok(),
-                    "max-length" => config.max_length = value.parse().ok(),
-                    "symbols" => config.symbols = Some(value.to_string()),
-                    "exclude-ambiguous" => config.exclude_ambiguous = value.parse().ok(),
-                    "count" => config.count = value.parse().ok(),
-                    _ => {
-                        // Unknown keys are ignored for forward compatibility
-                    }
-                }
-            }
+    /// Save configuration to a named config file
+    /// Overwrites existing file if present
+    pub fn save(&self, name: Option<&str>) -> io::Result<()> {
+        // Ensure config directory exists
+        let dir = Self::config_dir()?;
+        if !dir.exists() {
+            fs::create_dir_all(&dir)?;
         }
 
-        Ok(config)
-    }
-
-    /// Save configuration to ~/.genpassconfig
-    /// Overwrites existing file if present
-    pub fn save(&self) -> io::Result<()> {
-        let path = Self::config_path()?;
+        let path = Self::config_path(name)?;
         let mut content = String::new();
 
         content.push_str("# genpass configuration file\n");
@@ -141,6 +113,70 @@ impl Config {
         file.write_all(content.as_bytes())?;
 
         Ok(())
+    }
+
+    /// List all available config names
+    pub fn list_configs() -> io::Result<Vec<String>> {
+        let dir = Self::config_dir()?;
+
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut configs = Vec::new();
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            if entry.path().is_file() {
+                if let Some(name) = entry.file_name().to_str() {
+                    configs.push(name.to_string());
+                }
+            }
+        }
+
+        configs.sort();
+        Ok(configs)
+    }
+
+    /// Parse configuration from a string
+    fn parse(content: &str) -> io::Result<Self> {
+        let mut config = Self::default();
+
+        for line in content.lines() {
+            let line = line.trim();
+
+            // Skip empty lines and comments
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            // Parse key=value
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim();
+                let value = value.trim();
+
+                match key {
+                    "min-numeric" => config.min_numeric = value.parse().ok(),
+                    "max-numeric" => config.max_numeric = value.parse().ok(),
+                    "min-lower" => config.min_lower = value.parse().ok(),
+                    "max-lower" => config.max_lower = value.parse().ok(),
+                    "min-upper" => config.min_upper = value.parse().ok(),
+                    "max-upper" => config.max_upper = value.parse().ok(),
+                    "min-symbol" => config.min_symbol = value.parse().ok(),
+                    "max-symbol" => config.max_symbol = value.parse().ok(),
+                    "length" => config.length = value.parse().ok(),
+                    "min-length" => config.min_length = value.parse().ok(),
+                    "max-length" => config.max_length = value.parse().ok(),
+                    "symbols" => config.symbols = Some(value.to_string()),
+                    "exclude-ambiguous" => config.exclude_ambiguous = value.parse().ok(),
+                    "count" => config.count = value.parse().ok(),
+                    _ => {
+                        // Unknown keys are ignored for forward compatibility
+                    }
+                }
+            }
+        }
+
+        Ok(config)
     }
 
     /// Merge with CLI arguments (CLI args take precedence)

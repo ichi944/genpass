@@ -1,6 +1,6 @@
 [package]
 name = "genpass"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["ichi <ichi944g@gmail.com>"]
 description = "A lightweight, flexible password generator with zero dependencies for core logic"

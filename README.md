@@ -8,7 +8,7 @@ A lightweight, flexible password generator written in Rust.
 
 - 🎯 **Precise character control** - Set min/max limits for each character type independently
 - 🔧 **Custom symbol sets** - Define exactly which symbols to use (perfect for systems with special character restrictions)
-- 💾 **Save your preferences** - Store your default settings and never type the same flags again
+- 💾 **Multiple named configurations** - Save different profiles for work, personal, high-security accounts, etc.
 - 🪶 **Lightweight** - Zero dependencies for password generation, only stdlib + `/dev/urandom`
 - ⚡ **Fast** - Generate passwords instantly with minimal overhead
 
@@ -65,24 +65,39 @@ genpass -l 12 -S 0
 # Example output: k7mPqRtWxY2z
 ```
 
-### Example 3: Save Your Preferred Defaults
+### Example 3: Multiple Named Configurations
 
-Tired of typing the same options every time? Save your preferences!
+Tired of typing the same options every time? Save multiple named configurations for different use cases!
 
 ```bash
-# Save your favorite settings
-genpass -l 20 -n 3 -u 2 -s 1 --exclude-ambiguous --save-config
+# Save a "work" configuration for corporate systems
+genpass -l 20 -n 3 -u 2 -s 1 --exclude-ambiguous --save-config work
 
-# Now just run genpass - it uses your saved settings
-genpass
-# Uses: length=20, min-numeric=3, min-upper=2, min-symbol=1, exclude-ambiguous
+# Save a "secure" configuration for high-security accounts
+genpass -l 32 -n 4 -u 4 -s 4 --save-config secure
 
-# Override saved settings when needed
-genpass -c 5          # Generate 5 passwords with your saved settings
-genpass -l 32         # Use 32 characters instead of saved 20
+# Save a default configuration (used when no --config is specified)
+genpass -l 16 -n 2 --save-config ""
+
+# List all your saved configurations
+genpass --list-configs
+# Output:
+#   Available configurations:
+#     default
+#     secure
+#     work
+
+# Use a named configuration
+genpass --config work      # Uses work settings (20 chars, 3+ numbers, etc.)
+genpass --config secure    # Uses secure settings (32 chars, 4+ of each type)
+genpass                    # Uses default configuration
+
+# Override specific options from a saved config
+genpass --config work -c 5      # Use work config but generate 5 passwords
+genpass --config secure -l 24   # Use secure config but with 24 chars instead
 ```
 
-**Why this matters:** If you generate passwords regularly for the same system, you shouldn't have to remember and retype the same constraints every time.
+**Why this matters:** If you generate passwords for different systems with different requirements, you shouldn't have to remember and retype the same constraints every time.
 
 ### Example 4: Passwords Without Ambiguous Characters
 
@@ -145,19 +160,29 @@ Each character type can have independent min/max constraints:
 ### Output & Configuration
 
 ```bash
--c, --count <n>          Number of passwords to generate (default: 1)
-    --save-config        Save current options to ~/.genpassconfig
+-c, --count <n>              Number of passwords to generate (default: 1)
+    --config <name>          Load a named configuration
+    --save-config <name>     Save current options to a named config
+                             (use empty string "" for default)
+    --list-configs           List all available saved configurations
 ```
 
-## Configuration File
+## Configuration Files
 
-Settings are saved to `~/.genpassconfig` in simple `key=value` format:
+Settings are saved to `~/.genpass/` directory with each configuration as a separate file:
+
+- `~/.genpass/default` - Default configuration (loaded when no `--config` is specified)
+- `~/.genpass/work` - Named "work" configuration
+- `~/.genpass/secure` - Named "secure" configuration
+- etc.
+
+Each config file uses simple `key=value` format:
 
 ```
 length=20
-min_numeric=3
-min_upper=2
-exclude_ambiguous=true
+min-numeric=3
+min-upper=2
+exclude-ambiguous=true
 symbols=!@#$%^&*
 ```
 
@@ -203,9 +228,9 @@ genpass -l 32 -n 4 -u 4 -s 4
 I got frustrated with password generators that either:
 1. Don't let you control which symbols are used (and some systems reject certain symbols)
 2. Don't let you set maximum limits (some old systems have weird rules like "max 3 symbols")
-3. Make you type the same long command every time you need a password
+3. Make you type the same long command every time you need a password for different systems
 
-This tool solves all three problems with `--symbols`, `-S/--max-symbol`, and `--save-config`.
+This tool solves all three problems with `--symbols`, `-S/--max-symbol`, and multiple named configurations via `--save-config` and `--config`.
 
 ## Development
 
