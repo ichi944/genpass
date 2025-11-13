@@ -194,20 +194,28 @@ CLI arguments always override saved configuration.
 
 ```bash
 # Add to ~/.zshrc to auto-copy generated passwords
-alias genpass='genpass | pbcopy && pbpaste'
+genpass() {
+    command genpass "$@" | pbcopy && pbpaste
+}
 
 # Now genpass automatically copies to clipboard and shows the password
-genpass
+genpass                    # Works with default settings
+genpass --config work      # Works with arguments too
+genpass -l 32 -n 4         # All arguments are passed through
 ```
 
 ### Clipboard Integration (Linux)
 
 ```bash
 # Using xclip
-alias genpass='genpass | xclip -selection clipboard && xclip -selection clipboard -o'
+genpass() {
+    command genpass "$@" | xclip -selection clipboard && xclip -selection clipboard -o
+}
 
 # Using wl-clipboard (Wayland)
-alias genpass='genpass | wl-copy && wl-paste'
+genpass() {
+    command genpass "$@" | wl-copy && wl-paste
+}
 ```
 
 ### Quick Password Variations
