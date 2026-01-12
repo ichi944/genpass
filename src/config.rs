@@ -137,6 +137,80 @@ impl Config {
         Ok(configs)
     }
 
+    /// Display the configuration in a human-readable format
+    pub fn display(&self, name: Option<&str>) {
+        let config_name = name.unwrap_or("default");
+        println!("Configuration: {}", config_name);
+        println!();
+
+        // Character type constraints
+        println!("Character Type Constraints:");
+        Self::display_constraint("  Numeric (0-9)", self.min_numeric, self.max_numeric);
+        Self::display_constraint("  Lowercase (a-z)", self.min_lower, self.max_lower);
+        Self::display_constraint("  Uppercase (A-Z)", self.min_upper, self.max_upper);
+        Self::display_constraint("  Symbols", self.min_symbol, self.max_symbol);
+        println!();
+
+        // Password length
+        println!("Password Length:");
+        if let Some(length) = self.length {
+            println!("  Exact length: {}", length);
+        } else {
+            if let Some(min) = self.min_length {
+                println!("  Minimum: {}", min);
+            } else {
+                println!("  Minimum: 16 (default)");
+            }
+            if let Some(max) = self.max_length {
+                println!("  Maximum: {}", max);
+            }
+        }
+        println!();
+
+        // Symbol characters
+        println!("Symbol Characters:");
+        if let Some(ref symbols) = self.symbols {
+            println!("  {}", symbols);
+        } else {
+            println!("  !@#$%^&*()_+-=[]{{}}|;:,.<>? (default)");
+        }
+        println!();
+
+        // Other options
+        println!("Options:");
+        match self.exclude_ambiguous {
+            Some(true) => println!("  Exclude ambiguous characters: yes"),
+            Some(false) => println!("  Exclude ambiguous characters: no"),
+            None => println!("  Exclude ambiguous characters: no (default)"),
+        }
+        if let Some(count) = self.count {
+            println!("  Password count: {}", count);
+        } else {
+            println!("  Password count: 1 (default)");
+        }
+    }
+
+    /// Helper to display min/max constraints
+    fn display_constraint(label: &str, min: Option<usize>, max: Option<usize>) {
+        match (min, max) {
+            (Some(min_val), Some(max_val)) if min_val == max_val => {
+                println!("{}: exactly {}", label, min_val);
+            }
+            (Some(min_val), Some(max_val)) => {
+                println!("{}: {} to {}", label, min_val, max_val);
+            }
+            (Some(min_val), None) => {
+                println!("{}: minimum {}", label, min_val);
+            }
+            (None, Some(max_val)) => {
+                println!("{}: maximum {}", label, max_val);
+            }
+            (None, None) => {
+                println!("{}: no constraint", label);
+            }
+        }
+    }
+
     /// Parse configuration from a string
     fn parse(content: &str) -> io::Result<Self> {
         let mut config = Self::default();
