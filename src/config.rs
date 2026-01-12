@@ -137,6 +137,23 @@ impl Config {
         Ok(configs)
     }
 
+    /// Set a named configuration as the default
+    /// Copies the named config to the default config file
+    pub fn set_as_default(name: &str) -> io::Result<()> {
+        let source_path = Self::config_path(Some(name))?;
+        let default_path = Self::config_path(None)?;
+
+        if !source_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Configuration '{}' not found", name),
+            ));
+        }
+
+        fs::copy(&source_path, &default_path)?;
+        Ok(())
+    }
+
     /// Display the configuration in a human-readable format
     pub fn display(&self, name: Option<&str>) {
         let config_name = name.unwrap_or("default");
@@ -212,7 +229,8 @@ impl Config {
     }
 
     /// Interactive wizard to configure password generation
-    pub fn wizard() -> io::Result<(Self, Option<String>)> {
+    /// Returns: (Config, Option<config_name>, set_as_default)
+    pub fn wizard() -> io::Result<(Self, Option<String>, bool)> {
         let stdin = io::stdin();
         let mut reader = stdin.lock();
         let mut config = Self::default();
@@ -285,22 +303,34 @@ impl Config {
         // Save configuration
         print!("Save this configuration? (y/N): ");
         io::stdout().flush()?;
-        let save_name = if Self::read_yes_no(&mut reader, false)? {
+        let (save_name, set_as_default) = if Self::read_yes_no(&mut reader, false)? {
             print!("  Configuration name (default): ");
             io::stdout().flush()?;
             let mut name = String::new();
             reader.read_line(&mut name)?;
             let name = name.trim();
-            if name.is_empty() {
+            let config_name = if name.is_empty() {
                 None
             } else {
                 Some(name.to_string())
-            }
+            };
+
+            // Ask if this should be the default
+            let set_default = if config_name.is_some() {
+                print!("  Set as default configuration? (y/N): ");
+                io::stdout().flush()?;
+                Self::read_yes_no(&mut reader, false)?
+            } else {
+                // If saving to "default", it's already the default
+                false
+            };
+
+            (config_name, set_default)
         } else {
-            None
+            (None, false)
         };
 
-        Ok((config, save_name))
+        Ok((config, save_name, set_as_default))
     }
 
     /// Read a line from stdin
