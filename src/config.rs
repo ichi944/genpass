@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 /// Configuration that can be saved and loaded from ~/.genpassconfig
@@ -208,6 +208,190 @@ impl Config {
             (None, None) => {
                 println!("{}: no constraint", label);
             }
+        }
+    }
+
+    /// Interactive wizard to configure password generation
+    pub fn wizard() -> io::Result<(Self, Option<String>)> {
+        let stdin = io::stdin();
+        let mut reader = stdin.lock();
+        let mut config = Self::default();
+
+        println!("=== Password Generator Configuration Wizard ===");
+        println!();
+
+        // Password length
+        println!("Password Length:");
+        println!("  Choose an option:");
+        println!("  1. Exact length (recommended)");
+        println!("  2. Range (min to max)");
+        let length_choice = Self::read_choice(&mut reader, &["1", "2"])?;
+
+        if length_choice == "1" {
+            config.length = Some(Self::read_number(&mut reader, "  Enter password length", Some(16))?);
+        } else {
+            config.min_length = Some(Self::read_number(&mut reader, "  Enter minimum length", Some(12))?);
+            config.max_length = Some(Self::read_number(&mut reader, "  Enter maximum length", Some(20))?);
+        }
+        println!();
+
+        // Character type constraints
+        println!("Character Type Requirements:");
+        println!("  (Press Enter to skip any constraint)");
+        println!();
+
+        config.min_numeric = Self::read_optional_number(&mut reader, "  Minimum numeric characters (0-9)")?;
+        config.max_numeric = Self::read_optional_number(&mut reader, "  Maximum numeric characters (0-9)")?;
+        println!();
+
+        config.min_lower = Self::read_optional_number(&mut reader, "  Minimum lowercase letters (a-z)")?;
+        config.max_lower = Self::read_optional_number(&mut reader, "  Maximum lowercase letters (a-z)")?;
+        println!();
+
+        config.min_upper = Self::read_optional_number(&mut reader, "  Minimum uppercase letters (A-Z)")?;
+        config.max_upper = Self::read_optional_number(&mut reader, "  Maximum uppercase letters (A-Z)")?;
+        println!();
+
+        config.min_symbol = Self::read_optional_number(&mut reader, "  Minimum symbol characters")?;
+        config.max_symbol = Self::read_optional_number(&mut reader, "  Maximum symbol characters")?;
+        println!();
+
+        // Symbol characters
+        println!("Symbol Characters:");
+        println!("  Default: !@#$%^&*()_+-=[]{{}}|;:,.<>?");
+        print!("  Use custom symbols? (y/N): ");
+        io::stdout().flush()?;
+        if Self::read_yes_no(&mut reader, false)? {
+            config.symbols = Some(Self::read_string(&mut reader, "  Enter symbols to use")?);
+        }
+        println!();
+
+        // Exclude ambiguous
+        println!("Options:");
+        print!("  Exclude ambiguous characters (0/O, 1/l/I)? (y/N): ");
+        io::stdout().flush()?;
+        config.exclude_ambiguous = Some(Self::read_yes_no(&mut reader, false)?);
+        println!();
+
+        // Password count
+        config.count = Some(Self::read_number(&mut reader, "  Number of passwords to generate", Some(1))?);
+        println!();
+
+        // Summary
+        println!("=== Configuration Summary ===");
+        config.display(None);
+        println!();
+
+        // Save configuration
+        print!("Save this configuration? (y/N): ");
+        io::stdout().flush()?;
+        let save_name = if Self::read_yes_no(&mut reader, false)? {
+            print!("  Configuration name (default): ");
+            io::stdout().flush()?;
+            let mut name = String::new();
+            reader.read_line(&mut name)?;
+            let name = name.trim();
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
+        } else {
+            None
+        };
+
+        Ok((config, save_name))
+    }
+
+    /// Read a line from stdin
+    fn read_line(reader: &mut io::StdinLock) -> io::Result<String> {
+        let mut input = String::new();
+        reader.read_line(&mut input)?;
+        Ok(input.trim().to_string())
+    }
+
+    /// Read a number with optional default
+    fn read_number(reader: &mut io::StdinLock, prompt: &str, default: Option<usize>) -> io::Result<usize> {
+        loop {
+            if let Some(def) = default {
+                print!("{} [{}]: ", prompt, def);
+            } else {
+                print!("{}: ", prompt);
+            }
+            io::stdout().flush()?;
+
+            let input = Self::read_line(reader)?;
+
+            if input.is_empty() {
+                if let Some(def) = default {
+                    return Ok(def);
+                }
+                println!("  Please enter a number.");
+                continue;
+            }
+
+            match input.parse::<usize>() {
+                Ok(n) => return Ok(n),
+                Err(_) => println!("  Invalid number, please try again."),
+            }
+        }
+    }
+
+    /// Read an optional number (can be skipped)
+    fn read_optional_number(reader: &mut io::StdinLock, prompt: &str) -> io::Result<Option<usize>> {
+        print!("{}: ", prompt);
+        io::stdout().flush()?;
+
+        let input = Self::read_line(reader)?;
+
+        if input.is_empty() {
+            return Ok(None);
+        }
+
+        match input.parse::<usize>() {
+            Ok(n) => Ok(Some(n)),
+            Err(_) => {
+                println!("  Invalid number, skipping.");
+                Ok(None)
+            }
+        }
+    }
+
+    /// Read a string
+    fn read_string(reader: &mut io::StdinLock, prompt: &str) -> io::Result<String> {
+        print!("{}: ", prompt);
+        io::stdout().flush()?;
+        Self::read_line(reader)
+    }
+
+    /// Read yes/no with default
+    fn read_yes_no(reader: &mut io::StdinLock, default: bool) -> io::Result<bool> {
+        let input = Self::read_line(reader)?;
+
+        if input.is_empty() {
+            return Ok(default);
+        }
+
+        match input.to_lowercase().as_str() {
+            "y" | "yes" => Ok(true),
+            "n" | "no" => Ok(false),
+            _ => Ok(default),
+        }
+    }
+
+    /// Read a choice from a list of options
+    fn read_choice(reader: &mut io::StdinLock, options: &[&str]) -> io::Result<String> {
+        loop {
+            print!("  Enter choice: ");
+            io::stdout().flush()?;
+
+            let input = Self::read_line(reader)?;
+
+            if options.contains(&input.as_str()) {
+                return Ok(input);
+            }
+
+            println!("  Invalid choice, please try again.");
         }
     }
 
