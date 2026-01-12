@@ -78,6 +78,10 @@ pub struct Cli {
     /// List all available saved configurations
     #[arg(long)]
     pub list_configs: bool,
+
+    /// Display current configuration settings
+    #[arg(long)]
+    pub status: Option<String>,
 }
 
 fn main() {
@@ -99,6 +103,26 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("Error listing configurations: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
+    // Display status if requested and exit
+    if let Some(ref status_name) = cli.status {
+        let name = if status_name.is_empty() {
+            None
+        } else {
+            Some(status_name.as_str())
+        };
+
+        match config::Config::load(name) {
+            Ok(config) => {
+                config.display(name);
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error loading configuration: {}", e);
                 process::exit(1);
             }
         }
