@@ -82,10 +82,88 @@ pub struct Cli {
     /// Display current configuration settings
     #[arg(long)]
     pub status: Option<String>,
+
+    /// Interactive wizard mode for configuring password generation
+    #[arg(long)]
+    pub wizard: bool,
 }
 
 fn main() {
     let cli = Cli::parse();
+
+    // Run wizard mode if requested
+    if cli.wizard {
+        match config::Config::wizard() {
+            Ok((config, save_name)) => {
+                // Save configuration if requested
+                if let Some(name) = save_name {
+                    let name_to_save = if name.is_empty() {
+                        None
+                    } else {
+                        Some(name.as_str())
+                    };
+
+                    if let Err(e) = config.save(name_to_save) {
+                        eprintln!("Error saving configuration: {}", e);
+                        process::exit(1);
+                    }
+
+                    let path = config::Config::config_path(name_to_save).unwrap_or_default();
+                    println!("Configuration saved to {}", path.display());
+                    println!();
+                }
+
+                // Generate passwords using the configured settings
+                let (min_length, max_length) = if let Some(length) = config.length {
+                    (length, length)
+                } else {
+                    let min = config.min_length.unwrap_or(16);
+                    let max = config.max_length.unwrap_or(min);
+                    (min, max)
+                };
+
+                let constraints = generator::PasswordConstraints {
+                    min_numeric: config.min_numeric,
+                    max_numeric: config.max_numeric,
+                    min_lower: config.min_lower,
+                    max_lower: config.max_lower,
+                    min_upper: config.min_upper,
+                    max_upper: config.max_upper,
+                    min_symbol: config.min_symbol,
+                    max_symbol: config.max_symbol,
+                    min_length,
+                    max_length,
+                    symbols: config.symbols.unwrap_or_else(|| "!@#$%^&*()_+-=[]{}|;:,.<>?".to_string()),
+                    exclude_ambiguous: config.exclude_ambiguous.unwrap_or(false),
+                };
+
+                let generator = match generator::PasswordGenerator::new(constraints) {
+                    Ok(g) => g,
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        process::exit(1);
+                    }
+                };
+
+                println!("Generated passwords:");
+                let count = config.count.unwrap_or(1);
+                for _ in 0..count {
+                    match generator.generate() {
+                        Ok(password) => println!("  {}", password),
+                        Err(e) => {
+                            eprintln!("Error generating password: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error running wizard: {}", e);
+                process::exit(1);
+            }
+        }
+    }
 
     // List configs if requested and exit
     if cli.list_configs {
