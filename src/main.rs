@@ -86,6 +86,10 @@ pub struct Cli {
     /// Interactive wizard mode for configuring password generation
     #[arg(long)]
     pub wizard: bool,
+
+    /// Set a named configuration as the default
+    #[arg(long)]
+    pub set_default: Option<String>,
 }
 
 fn main() {
@@ -94,7 +98,7 @@ fn main() {
     // Run wizard mode if requested
     if cli.wizard {
         match config::Config::wizard() {
-            Ok((config, save_name)) => {
+            Ok((config, save_name, set_as_default)) => {
                 // Save configuration if requested
                 if let Some(name) = save_name {
                     let name_to_save = if name.is_empty() {
@@ -110,6 +114,17 @@ fn main() {
 
                     let path = config::Config::config_path(name_to_save).unwrap_or_default();
                     println!("Configuration saved to {}", path.display());
+
+                    // Set as default if requested
+                    if set_as_default {
+                        if let Some(name_str) = name_to_save {
+                            if let Err(e) = config::Config::set_as_default(name_str) {
+                                eprintln!("Error setting as default: {}", e);
+                                process::exit(1);
+                            }
+                            println!("Set as default configuration");
+                        }
+                    }
                     println!();
                 }
 
@@ -181,6 +196,22 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("Error listing configurations: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
+    // Set default config if requested and exit
+    if let Some(ref config_name) = cli.set_default {
+        match config::Config::set_as_default(config_name) {
+            Ok(()) => {
+                let path = config::Config::config_path(None).unwrap_or_default();
+                println!("Configuration '{}' set as default", config_name);
+                println!("Default configuration saved to {}", path.display());
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error setting default configuration: {}", e);
                 process::exit(1);
             }
         }
