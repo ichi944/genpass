@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 
 /// Configuration that can be saved and loaded from ~/.genpassconfig
@@ -139,6 +139,294 @@ impl Config {
 
         configs.sort();
         Ok(configs)
+    }
+
+    /// Set a named configuration as the default
+    /// Copies the named config to the default config file
+    pub fn set_as_default(name: &str) -> io::Result<()> {
+        let source_path = Self::config_path(Some(name))?;
+        let default_path = Self::config_path(None)?;
+
+        if !source_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Configuration '{}' not found", name),
+            ));
+        }
+
+        fs::copy(&source_path, &default_path)?;
+        Ok(())
+    }
+
+    /// Display the configuration in a human-readable format
+    pub fn display(&self, name: Option<&str>) {
+        let config_name = name.unwrap_or("default");
+        println!("Configuration: {}", config_name);
+        println!();
+
+        // Character type constraints
+        println!("Character Type Constraints:");
+        Self::display_constraint("  Numeric (0-9)", self.min_numeric, self.max_numeric);
+        Self::display_constraint("  Lowercase (a-z)", self.min_lower, self.max_lower);
+        Self::display_constraint("  Uppercase (A-Z)", self.min_upper, self.max_upper);
+        Self::display_constraint("  Symbols", self.min_symbol, self.max_symbol);
+        println!();
+
+        // Password length
+        println!("Password Length:");
+        if let Some(length) = self.length {
+            println!("  Exact length: {}", length);
+        } else {
+            if let Some(min) = self.min_length {
+                println!("  Minimum: {}", min);
+            } else {
+                println!("  Minimum: 16 (default)");
+            }
+            if let Some(max) = self.max_length {
+                println!("  Maximum: {}", max);
+            }
+        }
+        println!();
+
+        // Symbol characters
+        println!("Symbol Characters:");
+        if let Some(ref symbols) = self.symbols {
+            println!("  {}", symbols);
+        } else {
+            println!("  !@#$%^&*()_+-=[]{{}}|;:,.<>? (default)");
+        }
+        println!();
+
+        // Other options
+        println!("Options:");
+        match self.exclude_ambiguous {
+            Some(true) => println!("  Exclude ambiguous characters: yes"),
+            Some(false) => println!("  Exclude ambiguous characters: no"),
+            None => println!("  Exclude ambiguous characters: no (default)"),
+        }
+        if let Some(count) = self.count {
+            println!("  Password count: {}", count);
+        } else {
+            println!("  Password count: 1 (default)");
+        }
+    }
+
+    /// Helper to display min/max constraints
+    fn display_constraint(label: &str, min: Option<usize>, max: Option<usize>) {
+        match (min, max) {
+            (Some(min_val), Some(max_val)) if min_val == max_val => {
+                println!("{}: exactly {}", label, min_val);
+            }
+            (Some(min_val), Some(max_val)) => {
+                println!("{}: {} to {}", label, min_val, max_val);
+            }
+            (Some(min_val), None) => {
+                println!("{}: minimum {}", label, min_val);
+            }
+            (None, Some(max_val)) => {
+                println!("{}: maximum {}", label, max_val);
+            }
+            (None, None) => {
+                println!("{}: no constraint", label);
+            }
+        }
+    }
+
+    /// Interactive wizard to configure password generation
+    /// Returns: (Config, Option<config_name>, set_as_default)
+    pub fn wizard() -> io::Result<(Self, Option<String>, bool)> {
+        let stdin = io::stdin();
+        let mut reader = stdin.lock();
+        let mut config = Self::default();
+
+        println!("=== Password Generator Configuration Wizard ===");
+        println!();
+
+        // Password length
+        println!("Password Length:");
+        println!("  Choose an option:");
+        println!("  1. Exact length (recommended)");
+        println!("  2. Range (min to max)");
+        let length_choice = Self::read_choice(&mut reader, &["1", "2"])?;
+
+        if length_choice == "1" {
+            config.length = Some(Self::read_number(&mut reader, "  Enter password length", Some(16))?);
+        } else {
+            config.min_length = Some(Self::read_number(&mut reader, "  Enter minimum length", Some(12))?);
+            config.max_length = Some(Self::read_number(&mut reader, "  Enter maximum length", Some(20))?);
+        }
+        println!();
+
+        // Character type constraints
+        println!("Character Type Requirements:");
+        println!("  (Press Enter to skip any constraint)");
+        println!();
+
+        config.min_numeric = Self::read_optional_number(&mut reader, "  Minimum numeric characters (0-9)")?;
+        config.max_numeric = Self::read_optional_number(&mut reader, "  Maximum numeric characters (0-9)")?;
+        println!();
+
+        config.min_lower = Self::read_optional_number(&mut reader, "  Minimum lowercase letters (a-z)")?;
+        config.max_lower = Self::read_optional_number(&mut reader, "  Maximum lowercase letters (a-z)")?;
+        println!();
+
+        config.min_upper = Self::read_optional_number(&mut reader, "  Minimum uppercase letters (A-Z)")?;
+        config.max_upper = Self::read_optional_number(&mut reader, "  Maximum uppercase letters (A-Z)")?;
+        println!();
+
+        config.min_symbol = Self::read_optional_number(&mut reader, "  Minimum symbol characters")?;
+        config.max_symbol = Self::read_optional_number(&mut reader, "  Maximum symbol characters")?;
+        println!();
+
+        // Symbol characters
+        println!("Symbol Characters:");
+        println!("  Default: !@#$%^&*()_+-=[]{{}}|;:,.<>?");
+        print!("  Use custom symbols? (y/N): ");
+        io::stdout().flush()?;
+        if Self::read_yes_no(&mut reader, false)? {
+            config.symbols = Some(Self::read_string(&mut reader, "  Enter symbols to use")?);
+        }
+        println!();
+
+        // Exclude ambiguous
+        println!("Options:");
+        print!("  Exclude ambiguous characters (0/O, 1/l/I)? (y/N): ");
+        io::stdout().flush()?;
+        config.exclude_ambiguous = Some(Self::read_yes_no(&mut reader, false)?);
+        println!();
+
+        // Password count
+        config.count = Some(Self::read_number(&mut reader, "  Number of passwords to generate", Some(1))?);
+        println!();
+
+        // Summary
+        println!("=== Configuration Summary ===");
+        config.display(None);
+        println!();
+
+        // Save configuration
+        print!("Save this configuration? (y/N): ");
+        io::stdout().flush()?;
+        let (save_name, set_as_default) = if Self::read_yes_no(&mut reader, false)? {
+            print!("  Configuration name (default): ");
+            io::stdout().flush()?;
+            let mut name = String::new();
+            reader.read_line(&mut name)?;
+            let name = name.trim();
+            let config_name = if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            };
+
+            // Ask if this should be the default
+            let set_default = if config_name.is_some() {
+                print!("  Set as default configuration? (y/N): ");
+                io::stdout().flush()?;
+                Self::read_yes_no(&mut reader, false)?
+            } else {
+                // If saving to "default", it's already the default
+                false
+            };
+
+            (config_name, set_default)
+        } else {
+            (None, false)
+        };
+
+        Ok((config, save_name, set_as_default))
+    }
+
+    /// Read a line from stdin
+    fn read_line(reader: &mut io::StdinLock) -> io::Result<String> {
+        let mut input = String::new();
+        reader.read_line(&mut input)?;
+        Ok(input.trim().to_string())
+    }
+
+    /// Read a number with optional default
+    fn read_number(reader: &mut io::StdinLock, prompt: &str, default: Option<usize>) -> io::Result<usize> {
+        loop {
+            if let Some(def) = default {
+                print!("{} [{}]: ", prompt, def);
+            } else {
+                print!("{}: ", prompt);
+            }
+            io::stdout().flush()?;
+
+            let input = Self::read_line(reader)?;
+
+            if input.is_empty() {
+                if let Some(def) = default {
+                    return Ok(def);
+                }
+                println!("  Please enter a number.");
+                continue;
+            }
+
+            match input.parse::<usize>() {
+                Ok(n) => return Ok(n),
+                Err(_) => println!("  Invalid number, please try again."),
+            }
+        }
+    }
+
+    /// Read an optional number (can be skipped)
+    fn read_optional_number(reader: &mut io::StdinLock, prompt: &str) -> io::Result<Option<usize>> {
+        print!("{}: ", prompt);
+        io::stdout().flush()?;
+
+        let input = Self::read_line(reader)?;
+
+        if input.is_empty() {
+            return Ok(None);
+        }
+
+        match input.parse::<usize>() {
+            Ok(n) => Ok(Some(n)),
+            Err(_) => {
+                println!("  Invalid number, skipping.");
+                Ok(None)
+            }
+        }
+    }
+
+    /// Read a string
+    fn read_string(reader: &mut io::StdinLock, prompt: &str) -> io::Result<String> {
+        print!("{}: ", prompt);
+        io::stdout().flush()?;
+        Self::read_line(reader)
+    }
+
+    /// Read yes/no with default
+    fn read_yes_no(reader: &mut io::StdinLock, default: bool) -> io::Result<bool> {
+        let input = Self::read_line(reader)?;
+
+        if input.is_empty() {
+            return Ok(default);
+        }
+
+        match input.to_lowercase().as_str() {
+            "y" | "yes" => Ok(true),
+            "n" | "no" => Ok(false),
+            _ => Ok(default),
+        }
+    }
+
+    /// Read a choice from a list of options
+    fn read_choice(reader: &mut io::StdinLock, options: &[&str]) -> io::Result<String> {
+        loop {
+            print!("  Enter choice: ");
+            io::stdout().flush()?;
+
+            let input = Self::read_line(reader)?;
+
+            if options.contains(&input.as_str()) {
+                return Ok(input);
+            }
+
+            println!("  Invalid choice, please try again.");
+        }
     }
 
     /// Parse configuration from a string
