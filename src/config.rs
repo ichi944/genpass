@@ -19,6 +19,7 @@ pub struct Config {
     pub symbols: Option<String>,
     pub exclude_ambiguous: Option<bool>,
     pub count: Option<usize>,
+    pub copy: Option<bool>,
 }
 
 impl Config {
@@ -108,6 +109,9 @@ impl Config {
         if let Some(v) = self.count {
             content.push_str(&format!("count={}\n", v));
         }
+        if let Some(v) = self.copy {
+            content.push_str(&format!("copy={}\n", v));
+        }
 
         let mut file = fs::File::create(&path)?;
         file.write_all(content.as_bytes())?;
@@ -169,6 +173,7 @@ impl Config {
                     "symbols" => config.symbols = Some(value.to_string()),
                     "exclude-ambiguous" => config.exclude_ambiguous = value.parse().ok(),
                     "count" => config.count = value.parse().ok(),
+                    "copy" => config.copy = value.parse().ok(),
                     _ => {
                         // Unknown keys are ignored for forward compatibility
                     }
@@ -228,6 +233,9 @@ impl Config {
             self.count = Some(cli.count);
         } else if self.count.is_none() {
             self.count = Some(1);
+        }
+        if cli.copy {
+            self.copy = Some(true);
         }
     }
 }

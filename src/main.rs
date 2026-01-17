@@ -1,6 +1,7 @@
 mod random;
 mod generator;
 mod config;
+mod clipboard;
 
 use clap::Parser;
 use generator::{PasswordConstraints, PasswordGenerator};
@@ -66,6 +67,10 @@ pub struct Cli {
     /// Number of passwords to generate
     #[arg(long, short = 'c', default_value = "1")]
     pub count: usize,
+
+    /// Copy the last generated password to clipboard (macOS only)
+    #[arg(short = 'C', long)]
+    pub copy: bool,
 
     /// Load configuration from a named profile
     #[arg(long)]
@@ -173,13 +178,31 @@ fn main() {
 
     // Generate passwords
     let count = config.count.unwrap_or(1);
-    for _ in 0..count {
+    let copy_enabled = config.copy.unwrap_or(false);
+    let mut last_password: Option<String> = None;
+
+    for i in 0..count {
         match generator.generate() {
-            Ok(password) => println!("{}", password),
+            Ok(password) => {
+                println!("{}", password);
+
+                // Track last password if clipboard copy is enabled
+                if copy_enabled && i == count - 1 {
+                    last_password = Some(password);
+                }
+            }
             Err(e) => {
                 eprintln!("Error generating password: {}", e);
                 process::exit(1);
             }
+        }
+    }
+
+    // Copy last password to clipboard if requested
+    if let Some(password) = last_password {
+        if let Err(e) = clipboard::copy_to_clipboard(&password) {
+            eprintln!("Warning: Failed to copy to clipboard: {}", e);
+            // Don't exit - password was still printed successfully
         }
     }
 }
